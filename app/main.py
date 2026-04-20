@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import os
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -54,6 +56,26 @@ async def health() -> dict:
 @app.get("/metrics")
 async def metrics() -> dict:
     return snapshot()
+
+
+@app.get("/langfuse-traces")
+async def langfuse_traces(limit: int = 10) -> dict:
+    public = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    secret = os.getenv("LANGFUSE_SECRET_KEY", "")
+    base_url = os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
+    if not public or not secret:
+        return {"data": [], "meta": {"totalItems": 0}}
+    auth = base64.b64encode(f"{public}:{secret}".encode()).decode()
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(
+                f"{base_url}/api/public/traces",
+                params={"limit": limit, "orderBy": "timestamp.DESC"},
+                headers={"Authorization": f"Basic {auth}"},
+            )
+        return r.json()
+    except Exception as exc:
+        return {"data": [], "error": str(exc)}
 
 
 @app.post("/chat", response_model=ChatResponse)
