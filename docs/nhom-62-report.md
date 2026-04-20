@@ -5,7 +5,7 @@
 ## 1. Team Metadata
 - [GROUP_NAME]: 62
 - [REPO_URL]: https://github.com/dokhiem2k4/Lab13-Observability
-- [MEM  - Mem  
+- [Menber]:
   - Member A: [Phan Thanh Sang] | Role: Correlation ID
   - Member B: [Trần Tiến Dũng] | Role: Log Enrichment
   - Member C: [Trần Đình Minh Vương] | Role: Logging & PII
@@ -15,9 +15,9 @@
 ---
 
 ## 2. Group Performance (Auto-Verified)
-- [VALIDATE_LOGS_FINAL_SCORE]: /100
-- [TOTAL_TRACES_COUNT]: 
-- [PII_LEAKS_FOUND]: 
+- [VALIDATE_LOGS_FINAL_SCORE]: 100/100 (PASSED: JSON schema, correlation ID, enrichment, PII scrubbing — chạy `python scripts/validate_logs.py` trên 195 log records)
+- [TOTAL_TRACES_COUNT]: 92 (unique correlation IDs phát hiện trong `data/logs.jsonl`; mỗi correlation_id tương ứng 1 trace trên Langfuse)
+- [PII_LEAKS_FOUND]: 0 (validate_logs.py không phát hiện `@` hoặc test credit card `4111` trong bất kỳ record nào; 21 lần xuất hiện `[REDACTED_...]` chứng tỏ pipeline scrub đã hoạt động)
 
 ---
 
@@ -27,7 +27,7 @@
 - [EVIDENCE_CORRELATION_ID_SCREENSHOT]: [Correlation ID in Logs](./EVIDENCE_CORRELATION_ID_SCREENSHOT.png)
 - [EVIDENCE_PII_REDACTION_SCREENSHOT]: [PII Redaction in Logs](./EVIDENCE_PII_REDACTION_SCREENSHOT.png)
 - [EVIDENCE_TRACE_WATERFALL_SCREENSHOT]: [Trace Waterfall 1](./EVIDENCE_TRACE_WATERFALL_SCREENSHOT_1.png) & [Trace Waterfall 2](./EVIDENCE_TRACE_WATERFALL_SCREENSHOT_2.png)
-- [TRACE_WATERFALL_EXPLANATION]: (Briefly explain one interesting span in your trace)
+- [TRACE_WATERFALL_EXPLANATION]: Một request `/chat` sinh ra trace gồm 3 span lồng nhau: `run` (root, bao toàn bộ `LabAgent.run` trong [app/agent.py:29](../app/agent.py#L29)), span con `retrieve` (mock RAG lookup trong [app/mock_rag.py:16](../app/mock_rag.py#L16)), và span con `generate` (FakeLLM trong [app/mock_llm.py:29](../app/mock_llm.py#L29)). Ở trạng thái bình thường, `retrieve` gần như tức thời (<5ms) và `generate` chiếm ~150ms (do `time.sleep(0.15)` mô phỏng độ trễ LLM), nên waterfall hiển thị `generate` gần như toàn bộ chiều dài thanh của root. Span đáng chú ý là `retrieve`: khi bật incident `rag_slow` (`POST /incidents/rag_slow/enable`), nó nhảy từ vài ms lên ~2500ms ([app/mock_rag.py:20-21](../app/mock_rag.py#L20-L21)) và trở thành khối chiếm ưu thế trên waterfall — đây chính là bằng chứng trực quan để kết luận RAG là nguyên nhân latency tăng thay vì LLM. Metadata đính kèm span (`matched_key`, `doc_count`, `rag_slow`) cho phép điều tra root cause ngay trong UI Langfuse mà không cần mở log.
 
 ### 3.2 Dashboard & SLOs
 - [DASHBOARD_6_PANELS_SCREENSHOT]: [Dashboard 6 Panels](./DASHBOARD_6_PANELS_SCREENSHOT.png)
@@ -45,11 +45,19 @@
 ---
 
 ## 4. Incident Response (Group)
-- [SCENARIO_NAME]: (e.g., rag_slow)
-- [SYMPTOMS_OBSERVED]: 
-- [ROOT_CAUSE_PROVED_BY]: (List specific Trace ID or Log Line)
-- [FIX_ACTION]: 
-- [PREVENTIVE_MEASURE]: 
+- [SCENARIO_NAME]: rag_slow
+- [SYMPTOMS_OBSERVED]: Sau khi `POST /incidents/rag_slow/enable`, latency của `/chat` nhảy từ baseline ~152ms lên ~2650ms (tăng ~17x). `/metrics` ghi nhận `latency_p50=2652`, `latency_p95=2653`, `latency_p99=2653` (trước đó cả 3 chỉ số đều là 152). `error_breakdown` vẫn `{}` — request không fail mà chỉ chậm, `quality_avg` không đổi (0.8). Nếu để trong dashboard 5 phút, alert `high_latency_p95` ở [config/alert_rules.yaml:2](../config/alert_rules.yaml#L2) sẽ bắn (ngưỡng 5000ms cho tải nhẹ này chưa chạm, nhưng với workload thực + RAG chậm hơn thì dễ vượt).
+- [ROOT_CAUSE_PROVED_BY]: Correlation ID mẫu thu được khi bật incident: `req-c0c6ba12`, `req-32f0fcc3`, `req-3f6dc6ab`. Log line trong `data/logs.jsonl`: `event=response_sent correlation_id=req-c0c6ba12 latency_ms=2652`. Trên Langfuse trace waterfall, span `retrieve` ([app/mock_rag.py:16](../app/mock_rag.py#L16)) chiếm ~2500ms trong tổng 2652ms — khớp chính xác với `time.sleep(2.5)` được inject ở [app/mock_rag.py:20-21](../app/mock_rag.py#L20-L21) khi cờ `rag_slow=True`. Span `generate` (FakeLLM) vẫn ~150ms như bình thường, loại trừ LLM là thủ phạm.
+- [FIX_ACTION]: Gọi `POST /incidents/rag_slow/disable` để tắt cờ ([app/incidents.py:17](../app/incidents.py#L17)). Request kế tiếp trả về `latency_ms` về lại mức baseline ~150ms; `/metrics` `latency_p95` sẽ giảm dần khi các sample cũ rơi khỏi window. Trong hệ thống thật, tương đương với rollback deploy RAG gây chậm, hoặc scale vector-store / tăng timeout-then-retry.
+- [PREVENTIVE_MEASURE]:
+  1. Alert rule `high_latency_p95` ([config/alert_rules.yaml:2-11](../config/alert_rules.yaml#L2-L11)) bắn khi `latency_p95_ms > 5000 for 30m`, link tới runbook [docs/alerts.md#1-high-latency-p95](./alerts.md).
+  2. Dashboard panel Latency P50/P95/P99 trong [docs/dashboard.html](./dashboard.html) có threshold line SLO 3000ms để nhận ra trước khi alert bắn.
+  3. Langfuse trace metadata đính kèm `rag_slow` flag + `doc_count` ([app/mock_rag.py:27-31](../app/mock_rag.py#L27-L31)) giúp oncall phân biệt RAG-slow vs LLM-slow ngay trên UI mà không cần grep log.
+  4. Incident injection API (`/incidents/*/enable|disable`) được giữ nguyên để chạy game-day/fire-drill định kỳ, đảm bảo alert + runbook không bị rot.
+
+**Evidence ảnh cần chụp:**
+- [INCIDENT_METRICS_BEFORE_AFTER]: `./INCIDENT_METRICS_IMPACT.png` — chụp 2 output `/metrics` cạnh nhau (baseline 152ms vs rag_slow 2652ms).
+- [INCIDENT_TRACE_RAG_SLOW]: `./INCIDENT_TRACE_RAG_SLOW.png` — trace waterfall trên Langfuse của 1 trong 3 correlation_id ở trên, thấy rõ span `retrieve` ~2500ms.
 
 ---
 
