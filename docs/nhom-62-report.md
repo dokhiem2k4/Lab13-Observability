@@ -59,9 +59,17 @@
 - [TASKS_COMPLETED]: Phụ trách phần Logging, đảm bảo correlation_id được gắn vào logs và thực hiện redaction các thông tin nhạy cảm.
 - [EVIDENCE_LINK]: [PR #1](https://github.com/dokhiem2k4/Lab13-Observability/pull/1)
 
-### [MEMBER_B_NAME]
-- [TASKS_COMPLETED]: 
-- [EVIDENCE_LINK]: 
+### Trần Tiến Dũng
+- [TASKS_COMPLETED]: |
+  1. Implement log enrichment cho endpoint `POST /chat` bằng `bind_contextvars(...)` trong `app/main.py`, đảm bảo mọi log `service="api"` có đủ ngữ cảnh truy vết.
+  2. Enrich đầy đủ các field theo yêu cầu: `user_id_hash` (hash từ `user_id`), `session_id`, `feature`, `model` (từ `agent.model`), `env` (từ `APP_ENV`).
+  3. Fix lỗi gọi `agent.run(...)` (loại bỏ tham số `correlation_id` không đúng signature) để endpoint chạy ổn định và sinh log đúng.
+  4. Tạo log thực tế và chạy `python scripts/validate_logs.py` — phần log enrichment PASS (`Records with missing enrichment (context): 0`).
+- [EVIDENCE_LINK]: |
+  - Branch: `log_enrichment`
+  - Commit: `83654bb` (Log enrichment for /chat)
+  - Log evidence: `data/logs.jsonl` (các event `request_received`/`response_sent` có đủ `user_id_hash`, `session_id`, `feature`, `model`, `env`)
+  - Screenshot paths (to be added): `docs/EVIDENCE_LOG_ENRICHMENT_SCREENSHOT.png`, `docs/EVIDENCE_VALIDATE_LOGS_ENRICHMENT.png`
 
 ### [MEMBER_C_NAME]
 ### Trần Đình Minh Vương
