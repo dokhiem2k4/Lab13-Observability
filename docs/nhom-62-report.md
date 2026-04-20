@@ -55,7 +55,7 @@
 
 ## 5. Individual Contributions & Evidence
 
-### [MEMBER_A_NAME]
+### Phan Thanh Sang
 - [TASKS_COMPLETED]: Phụ trách phần Logging, đảm bảo correlation_id được gắn vào logs và thực hiện redaction các thông tin nhạy cảm.
 - [EVIDENCE_LINK]: [PR #1](https://github.com/dokhiem2k4/Lab13-Observability/pull/1)
 
