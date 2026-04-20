@@ -697,13 +697,17 @@ async function refreshTraces() {
       const id = (t.id||'').slice(0,12);
       const ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : '—';
       const name = t.name || '—';
-      const lat = t.latency != null ? t.latency : null;
+      const latSec = t.latency != null ? t.latency : null;
+      const lat = latSec != null ? latSec * 1000 : null; // convert seconds → ms
       const latStr = lat != null ? lat.toFixed(0)+' ms' : '—';
       const latColor = lat==null?'var(--muted)':lat<3000?'var(--green)':lat<5000?'var(--yellow)':'var(--red)';
       const latBg = lat==null?'rgba(0,0,0,0.05)':lat<3000?'rgba(5,150,105,0.1)':lat<5000?'rgba(217,119,6,0.1)':'rgba(225,29,72,0.1)';
-      const user = t.userId ? t.userId.slice(0,10)+'…' : '—';
-      const tags = (t.tags||[]).map(tg=>`<span class="tag-pill">${tg}</span>`).join('');
-      const sess = t.sessionId ? t.sessionId.slice(0,12)+'…' : '—';
+      const rawUser = t.userId || t.input?.kwargs?.user_id || null;
+      const user = rawUser ? String(rawUser).slice(0,12)+'…' : '—';
+      const rawTags = (t.tags||[]).length ? t.tags : (t.input?.kwargs?.feature ? [t.input.kwargs.feature] : []);
+      const tags = rawTags.map(tg=>`<span class="tag-pill">${tg}</span>`).join('');
+      const rawSess = t.sessionId || t.input?.kwargs?.session_id || null;
+      const sess = rawSess ? String(rawSess).slice(0,14)+'…' : '—';
       return `<tr>
         <td><span class="trace-id">${id}</span></td>
         <td style="color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px">${ts}</td>
